@@ -29,10 +29,9 @@ body {
 
 #map svg {
   position: absolute;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   pointer-events: none;
+  z-index: 1;
 }
 
 circle {
@@ -80,6 +79,12 @@ circle {
   margin-block: 1rem;
   font-size: 0.85rem;
 }
+
+.legend {
+  z-index: 2;
+  position: relative;
+}
+
 
 .legend > div {
   flex: 1;
