@@ -28,27 +28,30 @@ function minutesSinceMidnight(date) {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-function filterTripsByTime(trips, timeFilter) {
-  return timeFilter === -1
-    ? trips
-    : trips.filter((trip) => {
-        const started = minutesSinceMidnight(trip.started_at);
-        const ended = minutesSinceMidnight(trip.ended_at);
-        return (
-          Math.abs(started - timeFilter) <= 60 ||
-          Math.abs(ended - timeFilter) <= 60
-        );
-      });
+function filterByMinute(tripsByMinute, minute) {
+  if (minute === -1) return tripsByMinute.flat();
+
+  let minMinute = (minute - 60 + 1440) % 1440;
+  let maxMinute = (minute + 60) % 1440;
+
+  if (minMinute > maxMinute) {
+    let beforeMidnight = tripsByMinute.slice(minMinute);
+    let afterMidnight = tripsByMinute.slice(0, maxMinute);
+    return beforeMidnight.concat(afterMidnight).flat();
+  } else {
+    return tripsByMinute.slice(minMinute, maxMinute).flat();
+  }
 }
 
-function computeStationTraffic(stations, trips) {
+function computeStationTraffic(stations, timeFilter = -1) {
   const departures = d3.rollup(
-    trips,
+    filterByMinute(departuresByMinute, timeFilter),
     (v) => v.length,
     (d) => d.start_station_id
   );
+
   const arrivals = d3.rollup(
-    trips,
+    filterByMinute(arrivalsByMinute, timeFilter),
     (v) => v.length,
     (d) => d.end_station_id
   );
@@ -62,16 +65,25 @@ function computeStationTraffic(stations, trips) {
   });
 }
 
+// 🧠 Global buckets
+let departuresByMinute = Array.from({ length: 1440 }, () => []);
+let arrivalsByMinute = Array.from({ length: 1440 }, () => []);
+
 let timeFilter = -1;
-let svg, circles, radiusScale, stations, trips;
+let svg, circles, radiusScale, stations;
 
 map.on('load', async () => {
-  // Parse date strings on load
-  trips = await d3.csv(
+  const allTrips = await d3.csv(
     'https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv',
     (trip) => {
       trip.started_at = new Date(trip.started_at);
       trip.ended_at = new Date(trip.ended_at);
+
+      const startMin = minutesSinceMidnight(trip.started_at);
+      const endMin = minutesSinceMidnight(trip.ended_at);
+
+      departuresByMinute[startMin].push(trip);
+      arrivalsByMinute[endMin].push(trip);
       return trip;
     }
   );
@@ -79,17 +91,19 @@ map.on('load', async () => {
   try {
     const jsonurl = 'https://dsc106.com/labs/lab07/data/bluebikes-stations.json';
     const jsonData = await d3.json(jsonurl);
-    stations = computeStationTraffic(jsonData.data.stations, trips);
+    stations = jsonData.data.stations;
+
+    const enrichedStations = computeStationTraffic(stations);
 
     radiusScale = d3.scaleSqrt()
-      .domain([0, d3.max(stations, (d) => d.totalTraffic)])
+      .domain([0, d3.max(enrichedStations, (d) => d.totalTraffic)])
       .range([0, 25]);
 
-    // Add sources and layers
     map.addSource('boston_route', {
       type: 'geojson',
       data: 'https://opendata.arcgis.com/api/v3/datasets/4f97c1d6e2da489b9b0be2e750dfb973_0/downloads/data?format=geojson&spatialRefId=4326',
     });
+
     map.addLayer({
       id: 'bike-lanes',
       type: 'line',
@@ -105,6 +119,7 @@ map.on('load', async () => {
       type: 'geojson',
       data: 'https://data.cambridgema.gov/api/geospatial/ue5j-b2uc?method=export&format=GeoJSON',
     });
+
     map.addLayer({
       id: 'cambridge-lanes',
       type: 'line',
@@ -116,10 +131,10 @@ map.on('load', async () => {
       },
     });
 
-    // Add SVG and draw circles
     svg = d3.select('#map').select('svg');
+
     circles = svg.selectAll('circle')
-      .data(stations, (d) => d.short_name)
+      .data(enrichedStations, (d) => d.short_name)
       .enter()
       .append('circle')
       .attr('r', (d) => radiusScale(d.totalTraffic))
@@ -140,14 +155,11 @@ map.on('load', async () => {
     }
 
     function updateScatterPlot(timeFilter) {
-      const filteredTrips = filterTripsByTime(trips, timeFilter);
-      const filteredStations = computeStationTraffic(stations, filteredTrips);
+      const filteredStations = computeStationTraffic(stations, timeFilter);
 
-      if (timeFilter === -1) {
-        radiusScale.range([0, 25]);
-      } else {
-        radiusScale.range([3, 50]);
-      }
+      timeFilter === -1
+        ? radiusScale.range([0, 25])
+        : radiusScale.range([3, 50]);
 
       circles
         .data(filteredStations, (d) => d.short_name)
