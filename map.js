@@ -19,36 +19,77 @@ function getCoords(station) {
   return { cx: x, cy: y };
 }
 
+function formatTime(minutes) {
+  const date = new Date(0, 0, 0, 0, minutes);
+  return date.toLocaleString('en-US', { timeStyle: 'short' });
+}
+
+function minutesSinceMidnight(date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function filterTripsByTime(trips, timeFilter) {
+  return timeFilter === -1
+    ? trips
+    : trips.filter((trip) => {
+        const started = minutesSinceMidnight(trip.started_at);
+        const ended = minutesSinceMidnight(trip.ended_at);
+        return (
+          Math.abs(started - timeFilter) <= 60 ||
+          Math.abs(ended - timeFilter) <= 60
+        );
+      });
+}
+
+function computeStationTraffic(stations, trips) {
+  const departures = d3.rollup(
+    trips,
+    (v) => v.length,
+    (d) => d.start_station_id
+  );
+  const arrivals = d3.rollup(
+    trips,
+    (v) => v.length,
+    (d) => d.end_station_id
+  );
+
+  return stations.map((station) => {
+    const id = station.short_name;
+    station.arrivals = arrivals.get(id) ?? 0;
+    station.departures = departures.get(id) ?? 0;
+    station.totalTraffic = station.arrivals + station.departures;
+    return station;
+  });
+}
+
+let timeFilter = -1;
+let svg, circles, radiusScale, stations, trips;
+
 map.on('load', async () => {
-  const tripsURL = 'https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv';
-  const trips = await d3.csv(tripsURL);
+  // Parse date strings on load
+  trips = await d3.csv(
+    'https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv',
+    (trip) => {
+      trip.started_at = new Date(trip.started_at);
+      trip.ended_at = new Date(trip.ended_at);
+      return trip;
+    }
+  );
 
-  const departures = d3.rollup(trips, v => v.length, d => d.start_station_id);
-  const arrivals = d3.rollup(trips, v => v.length, d => d.end_station_id);
-
-  let stations;
   try {
     const jsonurl = 'https://dsc106.com/labs/lab07/data/bluebikes-stations.json';
     const jsonData = await d3.json(jsonurl);
-    stations = jsonData.data.stations;
+    stations = computeStationTraffic(jsonData.data.stations, trips);
 
-    stations = stations.map((station) => {
-      const id = station.short_name;
-      station.arrivals = arrivals.get(id) ?? 0;
-      station.departures = departures.get(id) ?? 0;
-      station.totalTraffic = station.arrivals + station.departures;
-      return station;
-    });
-
-    const radiusScale = d3.scaleSqrt()
-      .domain([0, d3.max(stations, d => d.totalTraffic)])
+    radiusScale = d3.scaleSqrt()
+      .domain([0, d3.max(stations, (d) => d.totalTraffic)])
       .range([0, 25]);
 
+    // Add sources and layers
     map.addSource('boston_route', {
       type: 'geojson',
       data: 'https://opendata.arcgis.com/api/v3/datasets/4f97c1d6e2da489b9b0be2e750dfb973_0/downloads/data?format=geojson&spatialRefId=4326',
     });
-
     map.addLayer({
       id: 'bike-lanes',
       type: 'line',
@@ -64,7 +105,6 @@ map.on('load', async () => {
       type: 'geojson',
       data: 'https://data.cambridgema.gov/api/geospatial/ue5j-b2uc?method=export&format=GeoJSON',
     });
-
     map.addLayer({
       id: 'cambridge-lanes',
       type: 'line',
@@ -76,12 +116,13 @@ map.on('load', async () => {
       },
     });
 
-    const svg = d3.select('#map').select('svg');
-    const circles = svg.selectAll('circle')
-      .data(stations)
+    // Add SVG and draw circles
+    svg = d3.select('#map').select('svg');
+    circles = svg.selectAll('circle')
+      .data(stations, (d) => d.short_name)
       .enter()
       .append('circle')
-      .attr('r', d => radiusScale(d.totalTraffic))
+      .attr('r', (d) => radiusScale(d.totalTraffic))
       .attr('fill', 'steelblue')
       .attr('stroke', 'white')
       .attr('stroke-width', 1)
@@ -94,18 +135,51 @@ map.on('load', async () => {
 
     function updatePositions() {
       circles
-        .attr('cx', d => getCoords(d).cx)
-        .attr('cy', d => getCoords(d).cy);
+        .attr('cx', (d) => getCoords(d).cx)
+        .attr('cy', (d) => getCoords(d).cy);
     }
+
+    function updateScatterPlot(timeFilter) {
+      const filteredTrips = filterTripsByTime(trips, timeFilter);
+      const filteredStations = computeStationTraffic(stations, filteredTrips);
+
+      if (timeFilter === -1) {
+        radiusScale.range([0, 25]);
+      } else {
+        radiusScale.range([3, 50]);
+      }
+
+      circles
+        .data(filteredStations, (d) => d.short_name)
+        .join('circle')
+        .attr('r', (d) => radiusScale(d.totalTraffic));
+    }
+
+    const timeSlider = document.getElementById('time-slider');
+    const selectedTime = document.getElementById('selected-time');
+    const anyTimeLabel = document.getElementById('any-time');
+
+    function updateTimeDisplay() {
+      timeFilter = Number(timeSlider.value);
+      if (timeFilter === -1) {
+        selectedTime.textContent = '';
+        anyTimeLabel.style.display = 'block';
+      } else {
+        selectedTime.textContent = formatTime(timeFilter);
+        anyTimeLabel.style.display = 'none';
+      }
+      updateScatterPlot(timeFilter);
+    }
+
+    timeSlider.addEventListener('input', updateTimeDisplay);
+    updateTimeDisplay();
 
     updatePositions();
     map.on('move', updatePositions);
     map.on('zoom', updatePositions);
     map.on('resize', updatePositions);
     map.on('moveend', updatePositions);
-
   } catch (error) {
     console.error('Error loading station JSON:', error);
-    return;
   }
 });
