@@ -116,9 +116,10 @@ map.on('load', async () => {
     });
 
     map.addSource('cambridge_route', {
-      type: 'geojson',
-      data: 'https://data.cambridgema.gov/api/geospatial/ue5j-b2uc?method=export&format=GeoJSON',
-    });
+        type: 'geojson',
+        data: 'https://dsc106.com/labs/lab07/data/cambridge-bike-lanes.geojson',
+      });
+      
 
     map.addLayer({
       id: 'cambridge-lanes',
