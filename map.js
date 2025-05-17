@@ -25,8 +25,33 @@ function getCoords(station) {
 }
 
 map.on('load', async () => {
-  let stations;
+  const tripsURL = 'https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv';
+  const trips = await d3.csv(tripsURL);
+  const departures = d3.rollup(
+    trips,
+    v => v.length,
+    d => d.start_station_id
+  );
+  
+  const arrivals = d3.rollup(
+    trips,
+    v => v.length,
+    d => d.end_station_id
+  );
+  stations = stations.map((station) => {
+    let id = station.short_name;
+    station.arrivals = arrivals.get(id) ?? 0;
+    station.departures = departures.get(id) ?? 0;
+    station.totalTraffic = station.arrivals + station.departures;
+    return station;
+  });
+  console.log('Enriched Stations:', stations);
 
+  const radiusScale = d3.scaleSqrt()
+  .domain([0, d3.max(stations, d => d.totalTraffic)])
+  .range([0, 25]);
+  
+  let stations;
   try {
     const jsonurl = 'https://dsc106.com/labs/lab07/data/bluebikes-stations.json';
     const jsonData = await d3.json(jsonurl);
@@ -80,11 +105,11 @@ map.on('load', async () => {
     .data(stations)
     .enter()
     .append('circle')
-    .attr('r', 5)
+    .attr('r', d => radiusScale(d.totalTraffic))
     .attr('fill', 'steelblue')
     .attr('stroke', 'white')
     .attr('stroke-width', 1)
-    .attr('opacity', 0.8);
+    .attr('opacity', 0.6);
 
   function updatePositions() {
     circles
