@@ -131,7 +131,7 @@ map.on('load', async () => {
         'line-opacity': 0.4,
       },
     });
-
+    const container = map.getCanvasContainer();
     svg = d3.select('#map')
     .append('svg')
     .style('position', 'absolute')
