@@ -110,6 +110,12 @@ map.on('load', async () => {
     .attr('stroke', 'white')
     .attr('stroke-width', 1)
     .attr('opacity', 0.6);
+    circles.each(function (d) {
+        d3.select(this)
+          .append('title')
+          .text(`${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`);
+      });
+      
 
   function updatePositions() {
     circles
