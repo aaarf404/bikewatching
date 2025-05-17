@@ -132,7 +132,14 @@ map.on('load', async () => {
       },
     });
 
-    svg = d3.select('#map').select('svg');
+    svg = d3.select('#map')
+    .append('svg')
+    .style('position', 'absolute')
+    .style('width', '100%')
+    .style('height', '100%')
+    .style('z-index', 1)
+    .style('pointer-events', 'none');
+
 
     circles = svg.selectAll('circle')
         .data(stations, d => d.short_name)
