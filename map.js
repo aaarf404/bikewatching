@@ -65,12 +65,12 @@ function computeStationTraffic(stations, timeFilter = -1) {
   });
 }
 
-// 🧠 Global buckets
 let departuresByMinute = Array.from({ length: 1440 }, () => []);
 let arrivalsByMinute = Array.from({ length: 1440 }, () => []);
 
 let timeFilter = -1;
 let svg, circles, radiusScale, stations;
+let stationFlow = d3.scaleQuantize().domain([0, 1]).range([0, 0.5, 1]);
 
 map.on('load', async () => {
   const allTrips = await d3.csv(
@@ -134,19 +134,20 @@ map.on('load', async () => {
     svg = d3.select('#map').select('svg');
 
     circles = svg.selectAll('circle')
-      .data(enrichedStations, (d) => d.short_name)
-      .enter()
-      .append('circle')
-      .attr('r', (d) => radiusScale(d.totalTraffic))
-      .attr('fill', 'steelblue')
-      .attr('stroke', 'white')
-      .attr('stroke-width', 1)
-      .attr('opacity', 0.6)
-      .each(function (d) {
+        .data(stations, d => d.short_name)
+        .enter()
+        .append('circle')
+        .attr('r', d => radiusScale(d.totalTraffic))
+        .attr('stroke', 'white')
+        .attr('stroke-width', 1)
+        .attr('opacity', 0.6)
+        .style('--departure-ratio', d => stationFlow(d.departures / d.totalTraffic))
+        .each(function (d) {
         d3.select(this)
           .append('title')
           .text(`${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`);
-      });
+  });
+
 
     function updatePositions() {
       circles
@@ -155,17 +156,21 @@ map.on('load', async () => {
     }
 
     function updateScatterPlot(timeFilter) {
-      const filteredStations = computeStationTraffic(stations, timeFilter);
-
-      timeFilter === -1
-        ? radiusScale.range([0, 25])
-        : radiusScale.range([3, 50]);
-
-      circles
-        .data(filteredStations, (d) => d.short_name)
-        .join('circle')
-        .attr('r', (d) => radiusScale(d.totalTraffic));
-    }
+        const filteredTrips = filterTripsByTime(trips, timeFilter);
+        const filteredStations = computeStationTraffic(stations, filteredTrips);
+      
+        if (timeFilter === -1) {
+          radiusScale.range([0, 25]);
+        } else {
+          radiusScale.range([3, 50]);
+        }
+      
+        circles
+          .data(filteredStations, d => d.short_name)
+          .join('circle')
+          .attr('r', d => radiusScale(d.totalTraffic))
+          .style('--departure-ratio', d => stationFlow(d.departures / d.totalTraffic));
+      }
 
     const timeSlider = document.getElementById('time-slider');
     const selectedTime = document.getElementById('selected-time');
