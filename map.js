@@ -3,8 +3,6 @@ import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7.9.0/+esm';
 import mapboxgl from 'https://cdn.jsdelivr.net/npm/mapbox-gl@2.15.0/+esm';
 // Check that Mapbox GL JS is loaded
 console.log('Mapbox GL JS Loaded:', mapboxgl);
-
-// Set your Mapbox access token here
 mapboxgl.accessToken = 'pk.eyJ1IjoiYWxlNDI4bWFvIiwiYSI6ImNtYXJqZDh6djA3b3cybW9sYTFiZnJ4eWUifQ.dXrAbKxfR0u6FcDooykzVQ';
 
 // Initialize the map
@@ -38,13 +36,6 @@ map.on('load', async () => {
     v => v.length,
     d => d.end_station_id
   );
-  stations = stations.map((station) => {
-    let id = station.short_name;
-    station.arrivals = arrivals.get(id) ?? 0;
-    station.departures = departures.get(id) ?? 0;
-    station.totalTraffic = station.arrivals + station.departures;
-    return station;
-  });
   console.log('Enriched Stations:', stations);
 
   const radiusScale = d3.scaleSqrt()
@@ -57,10 +48,17 @@ map.on('load', async () => {
     const jsonData = await d3.json(jsonurl);
     console.log('Loaded JSON Data:', jsonData);
     stations = jsonData.data.stations;
+    stations = stations.map((station) => {
+        let id = station.short_name;
+        station.arrivals = arrivals.get(id) ?? 0;
+        station.departures = departures.get(id) ?? 0;
+        station.totalTraffic = station.arrivals + station.departures;
+        return station;
+      });
     console.log('Stations Array:', stations);
   } catch (error) {
     console.error('Error loading JSON:', error);
-    return; // stop further execution if fetch fails
+    return;
   }
 
   // Boston bike lanes
