@@ -101,7 +101,7 @@ map.on('load', async () => {
 
     map.addSource('boston_route', {
       type: 'geojson',
-      data: 'https://opendata.arcgis.com/api/v3/datasets/4f97c1d6e2da489b9b0be2e750dfb973_0/downloads/data?format=geojson&spatialRefId=4326',
+      data: 'https://bostonopendata-boston.opendata.arcgis.com/datasets/boston::existing-bike-network-2022.geojson',
     });
 
     map.addLayer({
@@ -156,7 +156,6 @@ map.on('load', async () => {
     }
 
     function updateScatterPlot(timeFilter) {
-        const filteredTrips = filterTripsByTime(trips, timeFilter);
         const filteredStations = computeStationTraffic(stations, filteredTrips);
       
         if (timeFilter === -1) {
