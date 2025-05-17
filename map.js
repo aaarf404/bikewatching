@@ -156,7 +156,7 @@ map.on('load', async () => {
     }
 
     function updateScatterPlot(timeFilter) {
-        const filteredStations = computeStationTraffic(stations, filteredTrips);
+        const filteredStations = computeStationTraffic(stations, timeFilter);
       
         if (timeFilter === -1) {
           radiusScale.range([0, 25]);
